@@ -13,12 +13,13 @@
  * =========================================================================================
  */
 
-resolvers += Resolver.bintrayRepo("kamon-io", "snapshots")
-val kamonCore = "io.kamon" %% "kamon-core" % "1.0.0-RC1"
-val khronusClient = "com.despegar" % "khronus-java-client" % "0.0.6"
-val easyMock = "org.easymock" % "easymock" % "3.2"
+resolvers += Resolver.bintrayRepo("kamon-io", "releases")
+val kamonCore     = "io.kamon"     %% "kamon-core"          % "1.1.2"
+val khronusClient = "com.despegar" %  "khronus-java-client" % "0.0.6"
+val kamonTestkit  = "io.kamon"     %% "kamon-testkit"       % "1.1.2"
+val easyMock      = "org.easymock" %  "easymock"            % "3.2"
 
 name := "kamon-khronus"
 libraryDependencies ++=
   compileScope(kamonCore, khronusClient) ++
-  testScope(scalatest, easyMock)
+  testScope(scalatest, easyMock, kamonTestkit)

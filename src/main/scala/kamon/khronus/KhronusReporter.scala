@@ -18,31 +18,21 @@ package kamon.khronus
 
 import com.despegar.khronus.jclient.KhronusClient
 import com.typesafe.config.Config
-import kamon.metric.{Bucket, MetricDistribution, MetricValue, TickSnapshot}
+import kamon.metric.{Bucket, MetricDistribution, MetricValue, PeriodSnapshot}
 import kamon.{Kamon, MetricReporter}
 import org.slf4j.LoggerFactory
 
 import scala.util.{Failure, Success, Try}
 
 class KhronusReporter extends MetricReporter {
-  private val logger = LoggerFactory.getLogger(classOf[KhronusReporter])
-  private var khronusClientOpt: Option[KhronusClient] = None
+  protected val logger = LoggerFactory.getLogger(classOf[KhronusReporter])
+  protected var khronusClientOpt: Option[KhronusClient] = None
   logger.info("Starting the Kamon(Khronus) module")
 
-  override def reportTickSnapshot(snapshot: TickSnapshot): Unit = {
+  override def reportPeriodSnapshot(snapshot: PeriodSnapshot): Unit = {
     pushCounter(snapshot.metrics.counters)
     pushGauge(snapshot.metrics.gauges)
-    pushHistogram(snapshot.metrics.histograms ++ snapshot.metrics.minMaxCounters)
-  }
-
-  def pushHistogram(histograms: Seq[MetricDistribution]): Unit = {
-    for {
-      kc <- khronusClientOpt
-      metric <- histograms
-      bucket <- metric.distribution.bucketsIterator
-    } {
-      kc.recordTime(metric.name, bucket.value)
-    }
+    pushHistograms(snapshot.metrics.histograms ++ snapshot.metrics.rangeSamplers)
   }
 
   def pushCounter(counters: Seq[MetricValue]): Unit = {
@@ -63,11 +53,32 @@ class KhronusReporter extends MetricReporter {
     }
   }
 
+  def pushHistograms(histograms: Seq[MetricDistribution]): Unit = {
+    for {
+      kc <- khronusClientOpt
+      (metric, name) <- histograms.map(m => (m, metricName(m)))
+      bucket <- metric.distribution.bucketsIterator
+    } {
+      kc.recordTime(name, bucket.value)
+      println(s"recording histogram $name, value: ${bucket.value}")
+    }
+  }
+
+  def metricName(metric: MetricDistribution): String = metric match {
+    case MetricDistribution("span.processing-time", tags, _, _, _) =>
+      val spanKind = tags.get("span.kind").map(_ + ".").getOrElse("")
+      val operation = tags.getOrElse("operation", "unknown-operation")
+      s"span.$spanKind$operation"
+    case _ => metric.name
+  }
+
   override def start(): Unit = {
     configureClient(Kamon.config())
   }
 
-  override def stop(): Unit = {}
+  override def stop(): Unit = {
+    khronusClientOpt.foreach(_.shutdown())
+  }
 
   override def reconfigure(config: Config): Unit = {
     configureClient(config)
